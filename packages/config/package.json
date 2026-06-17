@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "@4ufitness/config",
   "version": "0.1.0",
   "private": true,
@@ -6,9 +6,9 @@
   "types": "index.ts",
   "scripts": {
     "lint": "echo lint config",
-    "typecheck": "tsc --noEmit --skipLibCheck"
+    "typecheck": "tsc --noEmit --skipLibCheck index.ts"
   },
   "devDependencies": {
-    "typescript": "latest"
+    "typescript": "5.9.2"
   }
 }

@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "4ufitness-platform",
   "private": true,
   "version": "0.1.0",
@@ -14,7 +14,7 @@
     "mobile:web": "pnpm --dir apps/mobile web"
   },
   "devDependencies": {
-    "turbo": "latest",
-    "typescript": "latest"
+    "turbo": "2.9.18",
+    "typescript": "5.9.2"
   }
 }

@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -29,8 +29,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
-        run: pnpm -r typecheck --if-present
-
       - name: Lint
-        run: pnpm -r lint --if-present
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
