@@ -1,0 +1,14 @@
+{
+  "name": "@4ufitness/ai",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "lint": "echo lint ai",
+    "typecheck": "tsc --noEmit --skipLibCheck"
+  },
+  "devDependencies": {
+    "typescript": "latest"
+  }
+}

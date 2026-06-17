@@ -1,0 +1,14 @@
+{
+  "name": "@4ufitness/types",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "lint": "echo lint types",
+    "typecheck": "tsc --noEmit --skipLibCheck"
+  },
+  "devDependencies": {
+    "typescript": "latest"
+  }
+}

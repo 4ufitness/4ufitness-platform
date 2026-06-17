@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "4UFitness",
+    "slug": "4ufitness",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "fourufitness",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fourufitness.app"
+    },
+    "android": {
+      "package": "com.fourufitness.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0F0C"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
