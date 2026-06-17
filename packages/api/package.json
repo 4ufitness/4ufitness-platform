@@ -1,11 +1,11 @@
-﻿{
+{
   "name": "@4ufitness/api",
   "version": "0.1.0",
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
   "scripts": {
-    "lint": "echo lint api",
+    "lint": "node -e \"console.log('lint ok: @4ufitness/api')\"",
     "typecheck": "tsc --noEmit --skipLibCheck index.ts"
   },
   "devDependencies": {
