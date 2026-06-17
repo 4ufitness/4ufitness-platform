@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs } from 'expo-router';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors } from '@/theme';
+import { luxuryColors, luxuryGradient } from '@/theme/luxury';
 
 type TabIconName =
   | 'home'
@@ -27,49 +28,49 @@ function TabIcon({
   inactiveIcon: TabIconName;
 }) {
   return (
-    <Ionicons
-      name={focused ? activeIcon : inactiveIcon}
-      size={22}
-      color={focused ? colors.goldSoft : colors.muted}
-    />
+    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+      <Ionicons
+        name={focused ? activeIcon : inactiveIcon}
+        size={22}
+        color={focused ? luxuryColors.goldLight : luxuryColors.muted}
+      />
+    </View>
   );
 }
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
 
-  const bottomSafePadding =
-    Platform.OS === 'android'
-      ? Math.max(insets.bottom, 22)
-      : Math.max(insets.bottom, 12);
-
-  const tabBarHeight = 64 + bottomSafePadding;
+  const bottomSafePadding = Platform.OS === 'android' ? Math.max(insets.bottom, 22) : Math.max(insets.bottom, 12);
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.goldSoft,
-        tabBarInactiveTintColor: colors.muted,
+        tabBarActiveTintColor: luxuryColors.goldLight,
+        tabBarInactiveTintColor: luxuryColors.muted,
         tabBarShowLabel: true,
         tabBarHideOnKeyboard: true,
+        tabBarBackground: () => <LinearGradient colors={luxuryGradient.tab} style={StyleSheet.absoluteFill} />,
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '700',
-          marginTop: 2,
-          marginBottom: 0,
+          fontSize: 11,
+          fontWeight: '800',
+          marginTop: 1,
         },
         tabBarItemStyle: {
-          paddingTop: 8,
-          paddingBottom: 2,
+          paddingTop: 6,
         },
         tabBarStyle: {
-          backgroundColor: colors.background,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
-          height: tabBarHeight,
-          paddingTop: 6,
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 64 + bottomSafePadding,
+          paddingTop: 4,
           paddingBottom: bottomSafePadding,
+          borderTopWidth: 1,
+          borderTopColor: luxuryColors.border,
+          backgroundColor: luxuryColors.background,
           elevation: 0,
           shadowOpacity: 0,
         },
@@ -79,9 +80,7 @@ export default function TabsLayout() {
         name="home"
         options={{
           title: 'Home',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} activeIcon="home" inactiveIcon="home-outline" />
-          ),
+          tabBarIcon: ({ focused }) => <TabIcon focused={focused} activeIcon="home" inactiveIcon="home-outline" />,
         }}
       />
 
@@ -89,9 +88,7 @@ export default function TabsLayout() {
         name="plan"
         options={{
           title: 'Plan',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} activeIcon="calendar" inactiveIcon="calendar-outline" />
-          ),
+          tabBarIcon: ({ focused }) => <TabIcon focused={focused} activeIcon="calendar" inactiveIcon="calendar-outline" />,
         }}
       />
 
@@ -100,11 +97,7 @@ export default function TabsLayout() {
         options={{
           title: 'AI Coach',
           tabBarIcon: ({ focused }) => (
-            <TabIcon
-              focused={focused}
-              activeIcon="chatbubble-ellipses"
-              inactiveIcon="chatbubble-ellipses-outline"
-            />
+            <TabIcon focused={focused} activeIcon="chatbubble-ellipses" inactiveIcon="chatbubble-ellipses-outline" />
           ),
         }}
       />
@@ -113,9 +106,7 @@ export default function TabsLayout() {
         name="progress"
         options={{
           title: 'Progress',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} activeIcon="stats-chart" inactiveIcon="stats-chart-outline" />
-          ),
+          tabBarIcon: ({ focused }) => <TabIcon focused={focused} activeIcon="stats-chart" inactiveIcon="stats-chart-outline" />,
         }}
       />
 
@@ -123,11 +114,22 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} activeIcon="person" inactiveIcon="person-outline" />
-          ),
+          tabBarIcon: ({ focused }) => <TabIcon focused={focused} activeIcon="person" inactiveIcon="person-outline" />,
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  iconWrap: {
+    width: 30,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapActive: {
+    borderRadius: 999,
+    backgroundColor: 'rgba(244, 213, 138, 0.08)',
+  },
+});
