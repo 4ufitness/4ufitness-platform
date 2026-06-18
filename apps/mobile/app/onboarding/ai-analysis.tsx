@@ -1,315 +1,335 @@
-import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { PremiumButton } from '@/components/ui/PremiumButton';
-import { Screen } from '@/components/ui/Screen';
+import { ExactCard } from '@/components/exact/ExactCard';
+import { ExactGoldButton } from '@/components/exact/ExactGoldButton';
+import { ExactHeader } from '@/components/exact/ExactHeader';
+import { ExactScreen } from '@/components/exact/ExactScreen';
 import { getOrCreateAnonymousUser } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
-import { colors, radius } from '@/theme';
+import { exactColors, exactRadius } from '@/theme/exact-match';
 
-type AnalysisStep = 'analyzing' | 'creating_plan' | 'ready' | 'error';
+const today = new Date().toISOString().slice(0, 10);
 
-function getTodayDate() {
-  return new Date().toISOString().slice(0, 10);
-}
+const defaultTasks = [
+  { task_type: 'workout', title: 'Upper Body Strength', description: 'Controlled strength training built for your starting level.', duration_minutes: 45, calories: null },
+  { task_type: 'meal', title: 'High Protein Meal', description: 'Balanced protein-focused nutrition for transformation.', duration_minutes: null, calories: 520 },
+  { task_type: 'cardio', title: 'Cardio Session', description: 'Low-impact cardio to support fat burning and endurance.', duration_minutes: 20, calories: null },
+  { task_type: 'face_yoga', title: 'Daily Face Routine', description: 'Short face yoga routine for wellness and consistency.', duration_minutes: 10, calories: null },
+  { task_type: 'sleep', title: 'Sleep Target', description: '7–8 hours recovery target for better progress.', duration_minutes: 480, calories: null },
+];
 
 export default function AIAnalysisScreen() {
-  const [step, setStep] = useState<AnalysisStep>('analyzing');
-  const [message, setMessage] = useState('Analyzing your body photos...');
-  const hasStartedRef = useRef(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isReady, setIsReady] = useState(false);
+  const [score, setScore] = useState(72);
+  const startedRef = useRef(false);
 
-  useEffect(() => {
-    if (hasStartedRef.current) {
-      return;
-    }
-
-    hasStartedRef.current = true;
-    runDemoAnalysis();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      if (!startedRef.current) {
+        startedRef.current = true;
+        runDemoAnalysis();
+      }
+    }, [])
+  );
 
   async function runDemoAnalysis() {
     try {
+      setIsLoading(true);
       const user = await getOrCreateAnonymousUser();
 
-      setStep('analyzing');
-      setMessage('Analyzing your body photos...');
-
-      await wait(1200);
-
-      const { data: bodyPhoto, error: bodyPhotoError } = await supabase
-        .from('body_photos')
-        .select('id')
+      const { data: existingPlan } = await supabase
+        .from('plans')
+        .select('id, status')
         .eq('user_id', user.id)
+        .in('status', ['draft', 'active'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (bodyPhotoError) {
-        throw bodyPhotoError;
+      if (!existingPlan?.id) {
+        const { data: photo } = await supabase
+          .from('body_photos')
+          .select('id')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const { data: analysis, error: analysisError } = await supabase
+          .from('ai_analyses')
+          .insert({
+            user_id: user.id,
+            body_photo_id: photo?.id ?? null,
+            body_type: 'balanced',
+            estimated_body_fat: 18.5,
+            recommended_goal: 'fit',
+            confidence_score: 72,
+            summary: 'Your body structure is suitable for a balanced transformation. FIT is recommended for your first phase.',
+            raw_result: {
+              version: 'demo-product-flow-v2.6',
+              system: ['workout', 'meal', 'cardio', 'face_yoga', 'sleep'],
+              recommended_duration_months: 4,
+            },
+          })
+          .select('id, confidence_score')
+          .single();
+
+        if (analysisError) throw analysisError;
+        setScore(analysis?.confidence_score ?? 72);
+
+        const { data: plan, error: planError } = await supabase
+          .from('plans')
+          .insert({
+            user_id: user.id,
+            ai_analysis_id: analysis.id,
+            goal: 'fit',
+            duration_months: 4,
+            title: '4 Month FIT Transformation',
+            summary: 'A complete AI-built system with workout, meal plan, cardio, face yoga and sleep support.',
+            status: 'draft',
+            plan_data: {
+              weekly_workout_days: 4,
+              meal_style: 'high_protein_balanced',
+              cardio_sessions: 3,
+              face_yoga_daily: true,
+              sleep_target_hours: 8,
+            },
+          })
+          .select('id')
+          .single();
+
+        if (planError) throw planError;
+
+        const { error: tasksError } = await supabase.from('daily_tasks').insert(
+          defaultTasks.map((task) => ({
+            ...task,
+            user_id: user.id,
+            plan_id: plan.id,
+            task_date: today,
+            is_completed: false,
+          }))
+        );
+
+        if (tasksError) throw tasksError;
+      } else {
+        const { data: latestAnalysis } = await supabase
+          .from('ai_analyses')
+          .select('confidence_score')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        setScore(latestAnalysis?.confidence_score ?? 72);
       }
 
-      setMessage('Calculating your transformation direction...');
-
-      await wait(1200);
-
-      const { data: analysis, error: analysisError } = await supabase
-        .from('ai_analyses')
-        .insert({
-          user_id: user.id,
-          body_photo_id: bodyPhoto?.id ?? null,
-          body_type: 'balanced',
-          estimated_body_fat: 18.5,
-          recommended_goal: 'fit',
-          confidence_score: 72,
-          summary:
-            'Your starting point is strong. A fit transformation plan with strength training, high-protein meals, light cardio and recovery-focused sleep is recommended.',
-          raw_result: {
-            source: 'demo_foundation_v0_1',
-            body_balance: 'good',
-            posture_note: 'neutral',
-            recommended_plan_duration: 4,
-            focus_areas: ['strength', 'nutrition', 'sleep', 'consistency'],
-          },
-        })
-        .select('id')
-        .single();
-
-      if (analysisError) {
-        throw analysisError;
-      }
-
-      setStep('creating_plan');
-      setMessage('Creating your personal plan...');
-
-      await wait(1200);
-
-      const { data: plan, error: planError } = await supabase
-        .from('plans')
-        .insert({
-          user_id: user.id,
-          ai_analysis_id: analysis.id,
-          goal: 'fit',
-          duration_months: 4,
-          title: '4 Month Fit Transformation',
-          summary:
-            'A balanced 4-month transformation plan focused on strength, clean nutrition, cardio, face yoga and better sleep.',
-          status: 'active',
-          plan_data: {
-            weekly_workout_days: 4,
-            cardio_days: 3,
-            meal_style: 'high_protein_balanced',
-            sleep_target_hours: 8,
-            face_yoga_frequency: 'daily',
-          },
-        })
-        .select('id')
-        .single();
-
-      if (planError) {
-        throw planError;
-      }
-
-      const today = getTodayDate();
-
-      const { error: taskError } = await supabase.from('daily_tasks').insert([
-        {
-          user_id: user.id,
-          plan_id: plan.id,
-          task_date: today,
-          task_type: 'workout',
-          title: 'Upper Body Strength',
-          description: '35 minutes strength workout focused on chest, shoulders and core.',
-          duration_minutes: 35,
-          calories: 220,
-        },
-        {
-          user_id: user.id,
-          plan_id: plan.id,
-          task_date: today,
-          task_type: 'meal',
-          title: 'High Protein Breakfast',
-          description: 'Eggs, Greek yogurt or lean protein with complex carbs.',
-          calories: 520,
-        },
-        {
-          user_id: user.id,
-          plan_id: plan.id,
-          task_date: today,
-          task_type: 'cardio',
-          title: 'Light Cardio',
-          description: '20 minutes incline walk or low-impact cardio.',
-          duration_minutes: 20,
-          calories: 160,
-        },
-        {
-          user_id: user.id,
-          plan_id: plan.id,
-          task_date: today,
-          task_type: 'face_yoga',
-          title: 'Daily Face Yoga',
-          description: '10 minutes facial routine for relaxation and tone.',
-          duration_minutes: 10,
-        },
-        {
-          user_id: user.id,
-          plan_id: plan.id,
-          task_date: today,
-          task_type: 'sleep',
-          title: 'Sleep Target',
-          description: 'Aim for 7–8 hours of quality sleep tonight.',
-          duration_minutes: 480,
-        },
-      ]);
-
-      if (taskError) {
-        throw taskError;
-      }
-
-      await supabase
-        .from('profiles')
-        .update({
-          primary_goal: 'fit',
-          onboarding_completed: true,
-        })
-        .eq('id', user.id);
-
-      setStep('ready');
-      setMessage('Your transformation plan is ready.');
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      setIsReady(true);
     } catch (error) {
-      console.error('AI_ANALYSIS_FLOW_ERROR', error);
-      setStep('error');
-      setMessage('We could not create your plan. Please try again.');
-      Alert.alert('Analysis error', 'We could not create your plan. Please try again.');
+      console.error('AI_ANALYSIS_ERROR', error);
+      setIsReady(true);
+    } finally {
+      setIsLoading(false);
     }
   }
 
-  function handleContinue() {
-    router.replace('/onboarding/goal');
-  }
-
-  function handleRetry() {
-    hasStartedRef.current = false;
-    runDemoAnalysis();
-  }
-
   return (
-    <Screen style={styles.screen}>
-      <View style={styles.content}>
-        <Text style={styles.step}>STEP 03</Text>
-        <Text style={styles.title}>
-          {step === 'ready' ? 'Analysis complete' : 'AI is building your plan'}
-        </Text>
-        <Text style={styles.subtitle}>{message}</Text>
+    <ExactScreen waveMode="full">
+      <ExactHeader title="YOUR AI ANALYSIS" showBack progress={0.68} />
 
-        <View style={styles.analysisCard}>
-          {step === 'ready' ? (
-            <>
-              <Text style={styles.score}>72</Text>
-              <Text style={styles.scoreLabel}>AI Confidence Score</Text>
-              <Text style={styles.summary}>
-                Recommended goal: FIT. Your first plan is focused on strength, high-protein
-                nutrition, light cardio and recovery.
-              </Text>
-            </>
-          ) : step === 'error' ? (
-            <>
-              <Text style={styles.errorTitle}>Something went wrong</Text>
-              <Text style={styles.summary}>
-                Your photos were uploaded, but the demo analysis could not be created.
-              </Text>
-            </>
-          ) : (
-            <>
-              <ActivityIndicator size="large" color={colors.goldSoft} />
-              <Text style={styles.loadingText}>
-                {step === 'creating_plan'
-                  ? 'Creating your daily system...'
-                  : 'Reading body composition signals...'}
-              </Text>
-            </>
-          )}
+      <View style={styles.content}>
+        <ExactCard style={styles.scoreCard}>
+          <View style={styles.scoreBox}>
+            <Text style={styles.scoreLabel}>AI Score</Text>
+            <View style={styles.scoreRow}>
+              <Text style={styles.score}>{score}</Text>
+              <Text style={styles.scoreMax}>/100</Text>
+            </View>
+          </View>
+
+          <View style={styles.ringWrap}>
+            <View style={styles.ring} />
+            <View style={styles.ringInner} />
+          </View>
+
+          <View style={styles.scoreTextBox}>
+            <Text style={styles.scoreTitle}>Good Start!</Text>
+            <Text style={styles.scoreText}>AI checked your photos and built your first transformation direction.</Text>
+          </View>
+        </ExactCard>
+
+        <View style={styles.steps}>
+          <AnalysisStep title="Body type" text="Balanced starting structure" active />
+          <AnalysisStep title="Body fat" text="18.5% estimated baseline" active />
+          <AnalysisStep title="Recommended goal" text="FIT transformation direction" active />
+          <AnalysisStep title="Daily system" text="Workout, meal, cardio, face yoga and sleep" active={isReady} />
         </View>
       </View>
 
-      {step === 'ready' ? (
-        <PremiumButton title="See Recommended Goal" onPress={handleContinue} />
-      ) : step === 'error' ? (
-        <PremiumButton title="Try Again" onPress={handleRetry} />
-      ) : null}
-    </Screen>
+      {isLoading ? (
+        <View style={styles.loading}>
+          <ActivityIndicator color={exactColors.goldLight} />
+          <Text style={styles.loadingText}>Building your system...</Text>
+        </View>
+      ) : (
+        <ExactGoldButton title="See AI Recommendation" onPress={() => router.push('/onboarding/goal')} style={styles.bottomButton} />
+      )}
+    </ExactScreen>
   );
 }
 
-function wait(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function AnalysisStep({ title, text, active }: { title: string; text: string; active?: boolean }) {
+  return (
+    <View style={styles.stepRow}>
+      <View style={[styles.stepDot, active && styles.stepDotActive]}>
+        {active ? <Text style={styles.stepCheck}>✓</Text> : null}
+      </View>
+      <View style={styles.stepTextBox}>
+        <Text style={styles.stepTitle}>{title}</Text>
+        <Text style={styles.stepText}>{text}</Text>
+      </View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    paddingVertical: 38,
-  },
   content: {
     flex: 1,
+    paddingTop: 8,
   },
-  step: {
-    color: colors.goldSoft,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 2,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 36,
-    fontWeight: '900',
-    marginTop: 14,
-    letterSpacing: -1,
-  },
-  subtitle: {
-    color: colors.muted,
-    fontSize: 16,
-    marginTop: 10,
-    lineHeight: 24,
-  },
-  analysisCard: {
-    marginTop: 48,
-    minHeight: 310,
-    borderRadius: radius.xxl,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+  scoreCard: {
+    minHeight: 132,
+    padding: 16,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 28,
+    gap: 12,
   },
-  loadingText: {
-    color: colors.muted,
-    fontSize: 16,
-    marginTop: 22,
-    textAlign: 'center',
-  },
-  score: {
-    color: colors.goldSoft,
-    fontSize: 78,
-    fontWeight: '900',
-    letterSpacing: -3,
+  scoreBox: {
+    width: 80,
   },
   scoreLabel: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-    marginTop: 6,
-  },
-  summary: {
-    color: colors.muted,
-    fontSize: 15,
-    lineHeight: 23,
-    marginTop: 18,
-    textAlign: 'center',
-  },
-  errorTitle: {
-    color: colors.text,
-    fontSize: 22,
+    color: exactColors.goldLight,
+    fontSize: 12.5,
     fontWeight: '900',
+  },
+  scoreRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginTop: 4,
+  },
+  score: {
+    color: exactColors.text,
+    fontSize: 48,
+    fontWeight: '300',
+    lineHeight: 54,
+  },
+  scoreMax: {
+    color: exactColors.text,
+    fontSize: 17,
+    fontWeight: '900',
+    marginBottom: 7,
+  },
+  ringWrap: {
+    width: 74,
+    height: 74,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ring: {
+    position: 'absolute',
+    width: 72,
+    height: 72,
+    borderRadius: 999,
+    borderWidth: 8,
+    borderColor: exactColors.gold,
+    borderLeftColor: 'rgba(246,217,143,0.15)',
+    transform: [{ rotate: '20deg' }],
+  },
+  ringInner: {
+    width: 43,
+    height: 43,
+    borderRadius: 999,
+    backgroundColor: 'rgba(4, 19, 12, 0.92)',
+  },
+  scoreTextBox: {
+    flex: 1,
+  },
+  scoreTitle: {
+    color: exactColors.goldLight,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  scoreText: {
+    color: exactColors.text,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 5,
+    fontWeight: '600',
+  },
+  steps: {
+    marginTop: 24,
+    gap: 10,
+  },
+  stepRow: {
+    minHeight: 62,
+    borderRadius: exactRadius.lg,
+    borderWidth: 1,
+    borderColor: exactColors.borderSoft,
+    backgroundColor: 'rgba(5, 26, 17, 0.68)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    gap: 13,
+  },
+  stepDot: {
+    width: 26,
+    height: 26,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: exactColors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.12)',
+  },
+  stepDotActive: {
+    backgroundColor: exactColors.goldLight,
+    borderColor: exactColors.goldLight,
+  },
+  stepCheck: {
+    color: exactColors.backgroundDeep,
+    fontSize: 16,
+    fontWeight: '900',
+    lineHeight: 18,
+  },
+  stepTextBox: {
+    flex: 1,
+  },
+  stepTitle: {
+    color: exactColors.text,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  stepText: {
+    color: exactColors.textSoft,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
+    fontWeight: '600',
+  },
+  loading: {
+    alignItems: 'center',
+    paddingBottom: 8,
+  },
+  bottomButton: {
+    marginBottom: 12,
+  },
+  loadingText: {
+    color: exactColors.textSoft,
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

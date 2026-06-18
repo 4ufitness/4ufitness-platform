@@ -2,7 +2,6 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -10,11 +9,14 @@ import {
   View,
 } from 'react-native';
 
-import { PremiumButton } from '@/components/ui/PremiumButton';
-import { Screen } from '@/components/ui/Screen';
+import { exactAssets } from '@/assets/exact/assets';
+import { ExactCard } from '@/components/exact/ExactCard';
+import { ExactHeader } from '@/components/exact/ExactHeader';
+import { ExactScreen } from '@/components/exact/ExactScreen';
+import { ExactTaskRow } from '@/components/exact/ExactTaskRow';
 import { getOrCreateAnonymousUser } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
-import { colors, radius } from '@/theme';
+import { exactColors, exactRadius } from '@/theme/exact-match';
 
 type Plan = {
   id: string;
@@ -23,12 +25,10 @@ type Plan = {
   goal: string;
   duration_months: number;
   status: string;
-  plan_data: Record<string, unknown> | null;
 };
 
 type DailyTask = {
   id: string;
-  task_date: string;
   task_type: string;
   title: string;
   description: string | null;
@@ -37,82 +37,114 @@ type DailyTask = {
   is_completed: boolean;
 };
 
-function getTodayDate() {
+type DayChip = {
+  key: string;
+  label: string;
+  date: string;
+  active: boolean;
+};
+
+function todayDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function formatGoal(goal?: string | null) {
+function buildWeekChips(): DayChip[] {
+  const today = new Date();
+  const dayIndex = today.getDay() === 0 ? 6 : today.getDay() - 1;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - dayIndex);
+
+  return ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((label, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+
+    return {
+      key: `${label}-${date.toISOString()}`,
+      label,
+      date: String(date.getDate()).padStart(2, '0'),
+      active: index === dayIndex,
+    };
+  });
+}
+
+function iconFor(type: string) {
+  if (type === 'meal') return exactAssets.icons.meal;
+  if (type === 'cardio') return exactAssets.icons.cardio;
+  if (type === 'face_yoga') return exactAssets.icons.faceYoga;
+  if (type === 'sleep') return exactAssets.icons.moon;
+  return exactAssets.icons.workout;
+}
+
+function metaFor(task: DailyTask) {
+  if (task.task_type === 'sleep') return '8 h';
+  if (task.calories) return `${task.calories} KCAL`;
+  if (task.duration_minutes) return `${task.duration_minutes} MIN`;
+  return undefined;
+}
+
+function goalLabel(goal?: string | null) {
   if (!goal) return 'Fit';
-
-  return goal
-    .replace('_', ' ')
-    .split(' ')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
+  return goal.charAt(0).toUpperCase() + goal.slice(1).replace('_', ' ');
 }
 
-function getPlanWeeks(durationMonths: number) {
-  if (durationMonths === 4) return 16;
-  if (durationMonths === 8) return 32;
-  if (durationMonths === 12) return 48;
-
-  return durationMonths * 4;
-}
-
-function getTaskIcon(type: string) {
-  switch (type) {
-    case 'workout':
-      return '🏋️';
-    case 'meal':
-      return '🥗';
-    case 'cardio':
-      return '❤️';
-    case 'face_yoga':
-      return '🧘';
-    case 'sleep':
-      return '🌙';
-    case 'motivation':
-      return '✨';
-    default:
-      return '•';
-  }
-}
-
-function getTaskLabel(type: string) {
-  switch (type) {
-    case 'workout':
-      return 'Workout';
-    case 'meal':
-      return 'Meal Plan';
-    case 'cardio':
-      return 'Cardio';
-    case 'face_yoga':
-      return 'Face Yoga';
-    case 'sleep':
-      return 'Sleep';
-    case 'motivation':
-      return 'Motivation';
-    default:
-      return 'Task';
-  }
-}
+const fallbackTasks: DailyTask[] = [
+  {
+    id: 'fallback-workout',
+    task_type: 'workout',
+    title: 'Workout',
+    description: 'Upper Body Strength',
+    duration_minutes: 45,
+    calories: null,
+    is_completed: false,
+  },
+  {
+    id: 'fallback-meal',
+    task_type: 'meal',
+    title: 'Meal Plan',
+    description: 'High Protein Meal',
+    duration_minutes: null,
+    calories: 520,
+    is_completed: false,
+  },
+  {
+    id: 'fallback-cardio',
+    task_type: 'cardio',
+    title: 'Cardio',
+    description: 'HIIT Session',
+    duration_minutes: 20,
+    calories: null,
+    is_completed: false,
+  },
+  {
+    id: 'fallback-face',
+    task_type: 'face_yoga',
+    title: 'Face Yoga',
+    description: 'Daily Face Routine',
+    duration_minutes: 10,
+    calories: null,
+    is_completed: false,
+  },
+  {
+    id: 'fallback-sleep',
+    task_type: 'sleep',
+    title: 'Sleep',
+    description: '7–8 Hours',
+    duration_minutes: 480,
+    calories: null,
+    is_completed: false,
+  },
+];
 
 export default function PlanScreen() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [tasks, setTasks] = useState<DailyTask[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const completedCount = useMemo(
-    () => tasks.filter((task) => task.is_completed).length,
-    [tasks]
-  );
-
-  const progressPercent = useMemo(() => {
-    if (!tasks.length) return 0;
-    return Math.round((completedCount / tasks.length) * 100);
-  }, [completedCount, tasks.length]);
+  const visibleTasks = tasks.length ? tasks : fallbackTasks;
+  const completed = useMemo(() => visibleTasks.filter((task) => task.is_completed).length, [visibleTasks]);
+  const progress = visibleTasks.length ? Math.round((completed / visibleTasks.length) * 100) : 0;
+  const weekChips = useMemo(() => buildWeekChips(), []);
 
   useFocusEffect(
     useCallback(() => {
@@ -120,502 +152,217 @@ export default function PlanScreen() {
     }, [])
   );
 
-  async function loadPlan(isRefresh = false) {
+  async function loadPlan(refresh = false) {
     try {
-      if (isRefresh) {
-        setIsRefreshing(true);
-      } else {
-        setIsLoading(true);
-      }
-
+      refresh ? setRefreshing(true) : setLoading(true);
       const user = await getOrCreateAnonymousUser();
 
-      const { data: planData, error: planError } = await supabase
+      const { data: planData } = await supabase
         .from('plans')
-        .select('id, title, summary, goal, duration_months, status, plan_data')
+        .select('id, title, summary, goal, duration_months, status')
         .eq('user_id', user.id)
         .eq('status', 'active')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (planError) {
-        throw planError;
-      }
-
       setPlan(planData as Plan | null);
 
-      if (!planData?.id) {
+      if (planData?.id) {
+        const { data } = await supabase
+          .from('daily_tasks')
+          .select('id, task_type, title, description, duration_minutes, calories, is_completed')
+          .eq('user_id', user.id)
+          .eq('plan_id', planData.id)
+          .eq('task_date', todayDate())
+          .order('created_at', { ascending: true });
+
+        setTasks((data ?? []) as DailyTask[]);
+      } else {
         setTasks([]);
-        return;
       }
-
-      const today = getTodayDate();
-
-      const { data: taskData, error: taskError } = await supabase
-        .from('daily_tasks')
-        .select(
-          'id, task_date, task_type, title, description, duration_minutes, calories, is_completed'
-        )
-        .eq('user_id', user.id)
-        .eq('plan_id', planData.id)
-        .eq('task_date', today)
-        .order('created_at', { ascending: true });
-
-      if (taskError) {
-        throw taskError;
-      }
-
-      setTasks((taskData ?? []) as DailyTask[]);
-    } catch (error) {
-      console.error('PLAN_LOAD_ERROR', error);
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      setLoading(false);
+      setRefreshing(false);
     }
   }
 
-  async function toggleTask(task: DailyTask) {
-    try {
-      setIsUpdating(true);
+  async function toggle(task: DailyTask) {
+    if (task.id.startsWith('fallback')) return;
 
-      const nextValue = !task.is_completed;
+    const next = !task.is_completed;
+    setTasks((current) => current.map((item) => (item.id === task.id ? { ...item, is_completed: next } : item)));
 
-      setTasks((current) =>
-        current.map((item) =>
-          item.id === task.id ? { ...item, is_completed: nextValue } : item
-        )
-      );
+    const { error } = await supabase
+      .from('daily_tasks')
+      .update({ is_completed: next, completed_at: next ? new Date().toISOString() : null })
+      .eq('id', task.id);
 
-      const { error } = await supabase
-        .from('daily_tasks')
-        .update({
-          is_completed: nextValue,
-          completed_at: nextValue ? new Date().toISOString() : null,
-        })
-        .eq('id', task.id);
-
-      if (error) {
-        throw error;
-      }
-    } catch (error) {
-      console.error('PLAN_TASK_TOGGLE_ERROR', error);
-
-      setTasks((current) =>
-        current.map((item) =>
-          item.id === task.id ? { ...item, is_completed: task.is_completed } : item
-        )
-      );
-    } finally {
-      setIsUpdating(false);
+    if (error) {
+      setTasks((current) => current.map((item) => (item.id === task.id ? { ...item, is_completed: task.is_completed } : item)));
     }
   }
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <Screen style={styles.centerScreen}>
-        <ActivityIndicator size="large" color={colors.goldSoft} />
-        <Text style={styles.loadingText}>Loading your plan...</Text>
-      </Screen>
-    );
-  }
-
-  if (!plan) {
-    return (
-      <Screen style={styles.screen}>
-        <View style={styles.emptyContent}>
-          <Text style={styles.kicker}>PLAN</Text>
-          <Text style={styles.title}>No active plan yet.</Text>
-          <Text style={styles.subtitle}>
-            Complete your AI analysis to generate your personal transformation plan.
-          </Text>
+      <ExactScreen>
+        <View style={styles.center}>
+          <ActivityIndicator color={exactColors.goldLight} />
         </View>
-      </Screen>
+      </ExactScreen>
     );
   }
 
   return (
-    <Screen style={styles.screen}>
+    <ExactScreen waveMode="home">
+      <ExactHeader title="YOUR DAILY PLAN" showBack={false} />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={() => loadPlan(true)}
-            tintColor={colors.goldSoft}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={() => loadPlan(true)} tintColor={exactColors.goldLight} />
         }
+        contentContainerStyle={styles.scroll}
       >
-        <View>
-          <Text style={styles.kicker}>YOUR PLAN</Text>
-          <Text style={styles.title}>{plan.title ?? '4UFitness Transformation'}</Text>
-          <Text style={styles.subtitle}>
-            {plan.summary ?? 'Your daily system is personalized for your goal.'}
-          </Text>
-        </View>
-
-        <View style={styles.heroCard}>
-          <View>
-            <Text style={styles.heroEyebrow}>ACTIVE GOAL</Text>
-            <Text style={styles.heroGoal}>{formatGoal(plan.goal)}</Text>
-          </View>
-
-          <View style={styles.progressCircle}>
-            <Text style={styles.progressValue}>{progressPercent}%</Text>
-            <Text style={styles.progressLabel}>Today</Text>
-          </View>
-        </View>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{plan.duration_months}M</Text>
-            <Text style={styles.statLabel}>Duration</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{getPlanWeeks(plan.duration_months)}W</Text>
-            <Text style={styles.statLabel}>Plan Phase</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>
-              {completedCount}/{tasks.length}
-            </Text>
-            <Text style={styles.statLabel}>Done</Text>
-          </View>
-        </View>
-
-        <View style={styles.systemCard}>
-          <Text style={styles.sectionEyebrow}>DAILY SYSTEM</Text>
-
-          <View style={styles.systemRows}>
-            <View style={styles.systemRow}>
-              <Text style={styles.systemIcon}>🏋️</Text>
-              <View style={styles.systemTextBox}>
-                <Text style={styles.systemTitle}>Workout</Text>
-                <Text style={styles.systemSubtitle}>Strength and consistency</Text>
-              </View>
+        <View style={styles.daysRow}>
+          {weekChips.map((day) => (
+            <View key={day.key} style={[styles.dayChip, day.active && styles.dayActive]}>
+              <Text style={[styles.dayLabel, day.active && styles.dayActiveText]}>{day.label}</Text>
+              <Text style={[styles.dayDate, day.active && styles.dayActiveText]}>{day.date}</Text>
             </View>
-
-            <View style={styles.systemRow}>
-              <Text style={styles.systemIcon}>🥗</Text>
-              <View style={styles.systemTextBox}>
-                <Text style={styles.systemTitle}>Meal Plan</Text>
-                <Text style={styles.systemSubtitle}>High protein balanced nutrition</Text>
-              </View>
-            </View>
-
-            <View style={styles.systemRow}>
-              <Text style={styles.systemIcon}>❤️</Text>
-              <View style={styles.systemTextBox}>
-                <Text style={styles.systemTitle}>Cardio</Text>
-                <Text style={styles.systemSubtitle}>Low impact fat-burning support</Text>
-              </View>
-            </View>
-
-            <View style={styles.systemRow}>
-              <Text style={styles.systemIcon}>🧘</Text>
-              <View style={styles.systemTextBox}>
-                <Text style={styles.systemTitle}>Face Yoga</Text>
-                <Text style={styles.systemSubtitle}>Daily wellness and relaxation</Text>
-              </View>
-            </View>
-
-            <View style={styles.systemRow}>
-              <Text style={styles.systemIcon}>🌙</Text>
-              <View style={styles.systemTextBox}>
-                <Text style={styles.systemTitle}>Sleep</Text>
-                <Text style={styles.systemSubtitle}>Recovery and discipline</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Today’s Plan</Text>
-          <Text style={styles.sectionMeta}>
-            {completedCount}/{tasks.length} completed
-          </Text>
-        </View>
-
-        <View style={styles.taskList}>
-          {tasks.map((task) => (
-            <Pressable
-              key={task.id}
-              style={[styles.taskCard, task.is_completed && styles.taskCardCompleted]}
-              onPress={() => toggleTask(task)}
-              disabled={isUpdating}
-            >
-              <View style={styles.taskIconBox}>
-                <Text style={styles.taskIcon}>{getTaskIcon(task.task_type)}</Text>
-              </View>
-
-              <View style={styles.taskContent}>
-                <Text style={styles.taskType}>{getTaskLabel(task.task_type)}</Text>
-                <Text style={styles.taskTitle}>{task.title}</Text>
-                <Text style={styles.taskDescription} numberOfLines={2}>
-                  {task.description ?? 'Personal task for today.'}
-                </Text>
-              </View>
-
-              <View style={styles.taskMeta}>
-                {task.duration_minutes ? (
-                  <Text style={styles.taskMetaText}>{task.duration_minutes} min</Text>
-                ) : task.calories ? (
-                  <Text style={styles.taskMetaText}>{task.calories} kcal</Text>
-                ) : null}
-
-                <View style={styles.checkCircle}>
-                  <Text style={styles.checkText}>{task.is_completed ? '✓' : ''}</Text>
-                </View>
-              </View>
-            </Pressable>
           ))}
         </View>
 
-        <PremiumButton title="Refresh Plan" onPress={() => loadPlan(true)} />
+        <ExactCard style={styles.planCard}>
+          <View style={styles.planTopRow}>
+            <View>
+              <Text style={styles.planEyebrow}>ACTIVE TRANSFORMATION</Text>
+              <Text style={styles.planTitle}>{plan?.title ?? '4UFitness Transformation'}</Text>
+            </View>
+            <View style={styles.progressPill}>
+              <Text style={styles.progressPillValue}>{progress}%</Text>
+              <Text style={styles.progressPillText}>Done</Text>
+            </View>
+          </View>
+
+          <Text style={styles.planSummary} numberOfLines={2}>
+            {plan?.summary ?? 'Today’s system is built around workout, meal, cardio, face yoga and sleep consistency.'}
+          </Text>
+
+          <View style={styles.planStats}>
+            <View style={styles.planStatBox}>
+              <Text style={styles.planStatValue}>{goalLabel(plan?.goal)}</Text>
+              <Text style={styles.planStatLabel}>Goal</Text>
+            </View>
+            <View style={styles.planStatBox}>
+              <Text style={styles.planStatValue}>{plan?.duration_months ?? 4}M</Text>
+              <Text style={styles.planStatLabel}>Plan</Text>
+            </View>
+            <View style={styles.planStatBox}>
+              <Text style={styles.planStatValue}>{completed}/{visibleTasks.length}</Text>
+              <Text style={styles.planStatLabel}>Today</Text>
+            </View>
+          </View>
+        </ExactCard>
+
+        <View style={styles.headerRow}>
+          <Text style={styles.sectionTitle}>TODAY’S PLAN</Text>
+          <Text style={styles.sectionMeta}>{completed}/{visibleTasks.length} completed</Text>
+        </View>
+
+        <View style={styles.list}>
+          {visibleTasks.map((task) => (
+            <ExactTaskRow
+              key={task.id}
+              icon={iconFor(task.task_type)}
+              title={task.title}
+              subtitle={task.description ?? 'Personalized for today'}
+              meta={metaFor(task)}
+              completed={task.is_completed}
+              onPress={() => toggle(task)}
+              compact
+              selected={task.is_completed}
+            />
+          ))}
+        </View>
+
+        <ExactCard style={styles.coachHintCard}>
+          <Text style={styles.coachHintTitle}>Need a change?</Text>
+          <Text style={styles.coachHintText}>
+            Ask AI Coach to replace a meal, adjust workout intensity or move your reminder time.
+          </Text>
+        </ExactCard>
       </ScrollView>
-    </Screen>
+    </ExactScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    paddingTop: 30,
-    paddingBottom: 0,
-  },
-  centerScreen: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    color: colors.muted,
-    marginTop: 16,
-    fontSize: 15,
-  },
-  scrollContent: {
-    paddingBottom: 34,
-  },
-  emptyContent: {
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  scroll: { paddingBottom: 118 },
+  daysRow: { flexDirection: 'row', gap: 5, marginTop: 3 },
+  dayChip: {
     flex: 1,
-    justifyContent: 'center',
-  },
-  kicker: {
-    color: colors.goldSoft,
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 4,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 38,
-    fontWeight: '900',
-    letterSpacing: -2,
-    lineHeight: 45,
-    marginTop: 16,
-  },
-  subtitle: {
-    color: colors.muted,
-    fontSize: 16,
-    lineHeight: 25,
-    marginTop: 14,
-  },
-  heroCard: {
-    marginTop: 30,
-    borderRadius: radius.xxl,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 24,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  heroEyebrow: {
-    color: colors.goldSoft,
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  heroGoal: {
-    color: colors.text,
-    fontSize: 34,
-    fontWeight: '900',
-    marginTop: 8,
-  },
-  progressCircle: {
-    width: 84,
-    height: 84,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.goldSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(212,175,55,0.08)',
-  },
-  progressValue: {
-    color: colors.goldSoft,
-    fontSize: 22,
-    fontWeight: '900',
-  },
-  progressLabel: {
-    color: colors.muted,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
-  },
-  statCard: {
-    flex: 1,
-    minHeight: 104,
-    borderRadius: radius.xl,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    justifyContent: 'center',
-  },
-  statValue: {
-    color: colors.goldSoft,
-    fontSize: 25,
-    fontWeight: '900',
-  },
-  statLabel: {
-    color: colors.muted,
-    fontSize: 12,
-    marginTop: 5,
-  },
-  systemCard: {
-    marginTop: 16,
-    borderRadius: radius.xxl,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 22,
-  },
-  sectionEyebrow: {
-    color: colors.goldSoft,
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  systemRows: {
-    marginTop: 16,
-    gap: 13,
-  },
-  systemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 13,
-  },
-  systemIcon: {
-    fontSize: 24,
-    width: 34,
-  },
-  systemTextBox: {
-    flex: 1,
-  },
-  systemTitle: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  systemSubtitle: {
-    color: colors.muted,
-    fontSize: 13,
-    marginTop: 2,
-  },
-  sectionHeader: {
-    marginTop: 28,
-    marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  sectionTitle: {
-    color: colors.text,
-    fontSize: 22,
-    fontWeight: '900',
-  },
-  sectionMeta: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  taskList: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  taskCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    borderRadius: radius.xl,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-  },
-  taskCardCompleted: {
-    opacity: 0.7,
-  },
-  taskIconBox: {
-    width: 48,
     height: 48,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  taskIcon: {
-    fontSize: 23,
-  },
-  taskContent: {
-    flex: 1,
-  },
-  taskType: {
-    color: colors.goldSoft,
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  taskTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  taskDescription: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 4,
-  },
-  taskMeta: {
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  taskMetaText: {
-    color: colors.goldSoft,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  checkCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 999,
+    borderRadius: exactRadius.sm,
     borderWidth: 1,
-    borderColor: colors.goldSoft,
+    borderColor: exactColors.borderSoft,
+    backgroundColor: 'rgba(7,31,20,0.76)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkText: {
-    color: colors.goldSoft,
-    fontSize: 16,
+  dayActive: {
+    backgroundColor: 'rgba(201,161,90,0.74)',
+    borderColor: exactColors.goldLight,
+  },
+  dayLabel: {
+    color: exactColors.goldLight,
+    fontSize: 9.6,
+    lineHeight: 12,
     fontWeight: '900',
   },
+  dayDate: {
+    color: exactColors.textSoft,
+    fontSize: 14,
+    lineHeight: 17,
+    fontWeight: '900',
+  },
+  dayActiveText: { color: exactColors.backgroundDeep },
+  planCard: { marginTop: 18, padding: 17 },
+  planTopRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'center' },
+  planEyebrow: { color: exactColors.goldLight, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.6 },
+  planTitle: { color: exactColors.text, fontSize: 19, lineHeight: 24, fontWeight: '900', marginTop: 7, maxWidth: 235 },
+  progressPill: {
+    width: 68,
+    height: 68,
+    borderRadius: exactRadius.full,
+    borderWidth: 1,
+    borderColor: exactColors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(247,217,148,0.07)',
+  },
+  progressPillValue: { color: exactColors.goldLight, fontSize: 20, fontWeight: '900' },
+  progressPillText: { color: exactColors.textSoft, fontSize: 10, fontWeight: '800', marginTop: 1 },
+  planSummary: { color: exactColors.textSoft, fontSize: 12.2, lineHeight: 18, fontWeight: '600', marginTop: 13 },
+  planStats: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  planStatBox: {
+    flex: 1,
+    minHeight: 60,
+    borderRadius: exactRadius.md,
+    borderWidth: 1,
+    borderColor: exactColors.borderSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.13)',
+  },
+  planStatValue: { color: exactColors.goldLight, fontSize: 16, fontWeight: '900' },
+  planStatLabel: { color: exactColors.textSoft, fontSize: 10.5, fontWeight: '800', marginTop: 3 },
+  headerRow: { marginTop: 20, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  sectionTitle: { color: exactColors.goldLight, fontSize: 16, fontWeight: '900', letterSpacing: 0.2 },
+  sectionMeta: { color: exactColors.textSoft, fontSize: 11.5, fontWeight: '800' },
+  list: { gap: 8 },
+  coachHintCard: { marginTop: 15, padding: 16 },
+  coachHintTitle: { color: exactColors.goldLight, fontSize: 15, fontWeight: '900' },
+  coachHintText: { color: exactColors.textSoft, fontSize: 12, lineHeight: 18, fontWeight: '600', marginTop: 5 },
 });

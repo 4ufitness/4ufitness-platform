@@ -1,158 +1,50 @@
-﻿# 4UFitness PROJECT STATUS
+# 4UFitness Project Status
 
 ## Current Version
+Product Flow + Exact Match UI Pack v2.0
 
-**v0.1.0-foundation**
+## Product Direction
+4UFitness is an AI-powered personal transformation system, not only a fitness app.
+The core promise is minimal questions, automatic AI planning, full plan transparency, and a premium dark emerald + champagne gold mobile experience.
 
-## Project Name
+## Locked Core Flow
+1. Welcome / Hello
+2. Body Info: age, height, weight only
+3. Front / Side / Back photo upload
+4. AI body analysis
+5. AI result and recommended Fit / Bulk / Lean goal
+6. Future body preview
+7. Full transformation plan preview before purchase
+8. Pricing / membership start
+9. Main dashboard
+10. Daily workout, meal, cardio, face yoga, sleep system
+11. AI Coach for plan changes and motivation
+12. Smart Assistant for reminders
 
-**4UFitness**
+## Completed in v2.0
+- Corrected onboarding order according to product docs.
+- Removed goal selection as the first decision point.
+- Added separate body info and photo upload screens.
+- Added AI result / goal confirmation flow.
+- Added Future Body screen.
+- Added Full Plan Preview screen before pricing.
+- Added Pricing screen placeholder for package-based sale.
+- Updated Dashboard, Plan, AI Coach, Progress, Profile/Smart Assistant with exact UI direction.
+- Bottom navigation aligned to reference: Home, Plan, Progress, Profile.
+- AI Coach kept accessible from Home, hidden from bottom tab.
+- Existing Supabase demo flow preserved.
 
-## Tagline
-
-**Transform Your Body. Upgrade Your Life.**
-
----
-
-## Current Phase
-
-**Foundation v0.1 Completed**
-
-Bu sürümde 4UFitness uygulamasının temel mobil, backend, Supabase ve GitHub altyapısı başarıyla kurulmuştur.
-
----
-
-## Completed
-
-### Mobile Foundation
-
-- React Native + Expo SDK 54 mobil uygulama yapısı kuruldu.
-- Expo Router navigation sistemi aktif edildi.
-- Premium dark / gold tema sistemi oluşturuldu.
-- Splash, Welcome, Body Info, Photo Upload, AI Analysis, Goal ve Home ekranları oluşturuldu.
-- Alt menü ikonları düzeltildi.
-- Android safe area / telefon navigation boşluğu düzeltildi.
-- Home dashboard Supabase canlı verisine bağlandı.
-
----
-
-### Supabase Foundation
-
-Aşağıdaki tablolar oluşturuldu:
-
-- profiles
-- body_photos
-- ai_analyses
-- plans
-- daily_tasks
-- ai_messages
-- subscriptions
-
----
-
-### Auth
-
-- Supabase Anonymous Auth aktif edildi.
-- Kullanıcı e-posta girmeden güvenli authenticated user olarak sisteme dahil olabiliyor.
-- RLS policy yapısı temel olarak çalışıyor.
-
----
-
-### Storage
-
-- body-photos bucket oluşturuldu.
-- Front / Side / Back fotoğraf upload sistemi çalışıyor.
-- Fotoğraflar user_id bazlı klasör yapısıyla Supabase Storage'a yükleniyor.
-
----
-
-### Backend Flow
-
-Aşağıdaki akış başarıyla çalışıyor:
-
-Body Info  
-↓  
-profiles kaydı  
-↓  
-Photo Upload  
-↓  
-Storage + body_photos kaydı  
-↓  
-AI Analysis Demo  
-↓  
-ai_analyses kaydı  
-↓  
-plans kaydı  
-↓  
-daily_tasks kaydı  
-↓  
-Home Dashboard canlı veri gösterimi
-
----
-
-### GitHub
-
-- GitHub repository oluşturuldu.
-- Monorepo yapısı push edildi.
-- GitHub Actions CI yeşil çalışır hale getirildi.
-- Foundation v0.1 branch/main akışı stabil hale getirildi.
-
----
-
-## Known Temporary Decisions
-
-### Mobile lint/typecheck
-
-Foundation v0.1 aşamasında CI stabilitesi için mobile lint/typecheck geçici olarak no-op hale getirildi.
-
-Sprint 1 içinde gerçek ESLint + TypeScript strict config kontrollü şekilde geri açılacak.
-
----
-
-### AI Analysis
-
-Gerçek AI henüz bağlanmadı.
-
-Şimdilik demo analiz sistemi kullanılıyor:
-
-- body_type: balanced
-- recommended_goal: fit
-- estimated_body_fat: demo value
-- confidence_score: demo value
-
-Gerçek OpenAI / body analysis sistemi Sprint 3 tarafında bağlanacak.
-
----
-
-## Current Working Flow
-
-Uygulamada şu akış çalışıyor:
-
-1. Welcome
-2. Body Info
-3. Photo Upload
-4. AI Analysis Demo
-5. Goal
-6. Home Dashboard
-
----
+## Still Demo / Placeholder
+- Real AI body analysis integration.
+- Real macro/meal planner generation.
+- Real RevenueCat purchase.
+- Real push notifications.
+- Real custom video library.
 
 ## Next Sprint
-
-# Sprint 1 — Luxury UI + Live Screens
-
-Sprint 1 hedefleri:
-
-- Goal ekranını Supabase `ai_analyses.recommended_goal` verisine bağlamak
-- Plan ekranını `daily_tasks` ve `plans` verisine bağlamak
-- AI Coach ekranını temel chat altyapısına hazırlamak
-- Home UI spacing / typography / premium kalite iyileştirmeleri
-- Demo kayıtların gereksiz çoğalmasını engellemek
-- Gerçek ESLint + TypeScript strict config hazırlığı
-- App icon / splash görsel sistemi iyileştirmesi
-
----
-
-## Status
-
-**Foundation v0.1 başarıyla tamamlandı.**
+Pack v2.1:
+- Add package pricing logic for 4 / 8 / 12 month plans.
+- Add real plan duration recommendation based on analysis.
+- Add meal planner screen with macro cards.
+- Add AI Coach Supabase history + backend-ready message API.
+- Add final icon/body figure polish.

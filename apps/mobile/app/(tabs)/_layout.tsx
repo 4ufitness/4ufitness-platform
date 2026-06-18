@@ -1,135 +1,70 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Image, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs } from 'expo-router';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { luxuryColors, luxuryGradient } from '@/theme/luxury';
+import { exactAssets } from '@/assets/exact/assets';
+import { exactColors, exactGradient } from '@/theme/exact-match';
 
-type TabIconName =
-  | 'home'
-  | 'home-outline'
-  | 'calendar'
-  | 'calendar-outline'
-  | 'chatbubble-ellipses'
-  | 'chatbubble-ellipses-outline'
-  | 'stats-chart'
-  | 'stats-chart-outline'
-  | 'person'
-  | 'person-outline';
+const tabs = {
+  home: exactAssets.icons.home,
+  plan: exactAssets.icons.plan,
+  progress: exactAssets.icons.progress,
+  profile: exactAssets.icons.profile,
+};
 
-function TabIcon({
-  focused,
-  activeIcon,
-  inactiveIcon,
-}: {
-  focused: boolean;
-  activeIcon: TabIconName;
-  inactiveIcon: TabIconName;
-}) {
+function TabIcon({ focused, icon }: { focused: boolean; icon: any }) {
   return (
     <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
-      <Ionicons
-        name={focused ? activeIcon : inactiveIcon}
-        size={22}
-        color={focused ? luxuryColors.goldLight : luxuryColors.muted}
-      />
+      <Image source={icon} style={[styles.icon, !focused && styles.iconInactive]} resizeMode="contain" />
     </View>
   );
 }
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
-
-  const bottomSafePadding = Platform.OS === 'android' ? Math.max(insets.bottom, 22) : Math.max(insets.bottom, 12);
+  const bottomSafePadding = Platform.OS === 'android' ? Math.max(insets.bottom, 34) : Math.max(insets.bottom, 14);
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: luxuryColors.goldLight,
-        tabBarInactiveTintColor: luxuryColors.muted,
+        tabBarActiveTintColor: exactColors.goldLight,
+        tabBarInactiveTintColor: exactColors.muted,
         tabBarShowLabel: true,
         tabBarHideOnKeyboard: true,
-        tabBarBackground: () => <LinearGradient colors={luxuryGradient.tab} style={StyleSheet.absoluteFill} />,
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '800',
-          marginTop: 1,
-        },
-        tabBarItemStyle: {
-          paddingTop: 6,
-        },
+        tabBarBackground: () => <LinearGradient colors={exactGradient.tab} style={StyleSheet.absoluteFill} />,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '900', marginTop: 0 },
+        tabBarItemStyle: { paddingTop: 7 },
         tabBarStyle: {
           position: 'absolute',
           left: 0,
           right: 0,
           bottom: 0,
           height: 64 + bottomSafePadding,
-          paddingTop: 4,
+          paddingTop: 3,
           paddingBottom: bottomSafePadding,
           borderTopWidth: 1,
-          borderTopColor: luxuryColors.border,
-          backgroundColor: luxuryColors.background,
+          borderTopColor: exactColors.border,
+          backgroundColor: exactColors.background,
           elevation: 0,
           shadowOpacity: 0,
         },
       }}
     >
-      <Tabs.Screen
-        name="home"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ focused }) => <TabIcon focused={focused} activeIcon="home" inactiveIcon="home-outline" />,
-        }}
-      />
-
-      <Tabs.Screen
-        name="plan"
-        options={{
-          title: 'Plan',
-          tabBarIcon: ({ focused }) => <TabIcon focused={focused} activeIcon="calendar" inactiveIcon="calendar-outline" />,
-        }}
-      />
-
-      <Tabs.Screen
-        name="ai-coach"
-        options={{
-          title: 'AI Coach',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} activeIcon="chatbubble-ellipses" inactiveIcon="chatbubble-ellipses-outline" />
-          ),
-        }}
-      />
-
-      <Tabs.Screen
-        name="progress"
-        options={{
-          title: 'Progress',
-          tabBarIcon: ({ focused }) => <TabIcon focused={focused} activeIcon="stats-chart" inactiveIcon="stats-chart-outline" />,
-        }}
-      />
-
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ focused }) => <TabIcon focused={focused} activeIcon="person" inactiveIcon="person-outline" />,
-        }}
-      />
+      <Tabs.Screen name="home" options={{ title: 'Home', tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={tabs.home} /> }} />
+      <Tabs.Screen name="plan" options={{ title: 'Plan', tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={tabs.plan} /> }} />
+      <Tabs.Screen name="ai-coach" options={{ href: null }} />
+      <Tabs.Screen name="progress" options={{ title: 'Progress', tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={tabs.progress} /> }} />
+      <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={tabs.profile} /> }} />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
-  iconWrap: {
-    width: 30,
-    height: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconWrapActive: {
-    borderRadius: 999,
-    backgroundColor: 'rgba(244, 213, 138, 0.08)',
-  },
+  iconWrap: { width: 34, height: 28, alignItems: 'center', justifyContent: 'center' },
+  iconWrapActive: { borderRadius: 999, backgroundColor: 'rgba(246,217,143,0.08)' },
+  icon: { width: 25, height: 25 },
+  iconInactive: { opacity: 0.54 },
 });

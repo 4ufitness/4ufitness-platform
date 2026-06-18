@@ -1,73 +1,49 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { PremiumButton } from '@/components/ui/PremiumButton';
-import { Screen } from '@/components/ui/Screen';
+import { exactAssets } from '@/assets/exact/assets';
+import { ExactCard } from '@/components/exact/ExactCard';
+import { ExactGoldButton } from '@/components/exact/ExactGoldButton';
+import { ExactHeader } from '@/components/exact/ExactHeader';
+import { ExactScreen } from '@/components/exact/ExactScreen';
 import { getOrCreateAnonymousUser } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
-import { colors, radius } from '@/theme';
+import { exactColors, exactRadius } from '@/theme/exact-match';
 
-type GoalKey = 'fit' | 'lean' | 'bulk';
+type GoalKey = 'fit' | 'bulk' | 'lean';
 
 type Analysis = {
-  id: string;
-  recommended_goal: GoalKey | 'lose_weight' | null;
+  recommended_goal: string | null;
   confidence_score: number | null;
-  summary: string | null;
   estimated_body_fat: number | null;
-};
-
-type Plan = {
-  id: string;
-  goal: GoalKey | 'lose_weight';
-  duration_months: number;
-  title: string | null;
+  body_type: string | null;
   summary: string | null;
 };
 
-const goals: {
-  key: GoalKey;
-  title: string;
-  subtitle: string;
-  description: string;
-}[] = [
-  {
-    key: 'fit',
-    title: 'FIT',
-    subtitle: 'Balanced transformation',
-    description: 'Build strength, improve shape, increase energy and stay consistent.',
-  },
-  {
-    key: 'lean',
-    title: 'LEAN',
-    subtitle: 'Defined and lighter',
-    description: 'Focus on fat loss, light muscle definition, clean nutrition and cardio.',
-  },
-  {
-    key: 'bulk',
-    title: 'BULK',
-    subtitle: 'Muscle growth',
-    description: 'Increase muscle mass with strength training and higher calorie nutrition.',
-  },
+type Plan = { id: string; duration_months: number; status: string; goal?: string | null };
+
+const goals = [
+  { key: 'fit' as GoalKey, title: 'Fit', subtitle: 'Get fit & improve your overall health', figure: exactAssets.figures.fit },
+  { key: 'bulk' as GoalKey, title: 'Bulk', subtitle: 'Build muscle & gain weight', figure: exactAssets.figures.bulk },
+  { key: 'lean' as GoalKey, title: 'Lean', subtitle: 'Lose fat & build a lean physique', figure: exactAssets.figures.lean },
 ];
 
 function normalizeGoal(goal?: string | null): GoalKey {
-  if (goal === 'lean') return 'lean';
   if (goal === 'bulk') return 'bulk';
-
+  if (goal === 'lean') return 'lean';
   return 'fit';
 }
 
-function formatGoal(goal: string) {
-  return goal.toUpperCase();
+function goalTitle(goal: GoalKey) {
+  if (goal === 'bulk') return 'BULK';
+  if (goal === 'lean') return 'LEAN';
+  return 'FIT';
+}
+
+function formatBodyType(type?: string | null) {
+  if (!type) return 'Balanced';
+  return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
 export default function GoalScreen() {
@@ -77,361 +53,327 @@ export default function GoalScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  const recommendedGoal = useMemo(
-    () => normalizeGoal(analysis?.recommended_goal),
-    [analysis?.recommended_goal]
-  );
+  useFocusEffect(useCallback(() => { loadData(); }, []));
 
-  useFocusEffect(
-    useCallback(() => {
-      loadGoalData();
-    }, [])
-  );
-
-  async function loadGoalData() {
+  async function loadData() {
     try {
       setIsLoading(true);
-
       const user = await getOrCreateAnonymousUser();
-
-      const { data: analysisData, error: analysisError } = await supabase
-        .from('ai_analyses')
-        .select('id, recommended_goal, confidence_score, summary, estimated_body_fat')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (analysisError) {
-        throw analysisError;
-      }
-
-      const { data: planData, error: planError } = await supabase
-        .from('plans')
-        .select('id, goal, duration_months, title, summary')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (planError) {
-        throw planError;
-      }
-
+      const [{ data: analysisData }, { data: planData }] = await Promise.all([
+        supabase
+          .from('ai_analyses')
+          .select('recommended_goal, confidence_score, estimated_body_fat, body_type, summary')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('plans')
+          .select('id, duration_months, status, goal')
+          .eq('user_id', user.id)
+          .in('status', ['draft', 'active'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
       setAnalysis(analysisData as Analysis | null);
       setPlan(planData as Plan | null);
-
-      const nextGoal = normalizeGoal(analysisData?.recommended_goal ?? planData?.goal);
-      setSelectedGoal(nextGoal);
-    } catch (error) {
-      console.error('GOAL_LOAD_ERROR', error);
-      Alert.alert('Goal error', 'We could not load your recommended goal.');
+      setSelectedGoal(normalizeGoal(analysisData?.recommended_goal ?? planData?.goal));
     } finally {
       setIsLoading(false);
     }
   }
 
-  async function handleContinue() {
+  async function handleNext() {
     try {
       setIsSaving(true);
-
       const user = await getOrCreateAnonymousUser();
-
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          primary_goal: selectedGoal,
-          onboarding_completed: true,
-        })
-        .eq('id', user.id);
-
-      if (profileError) {
-        throw profileError;
-      }
-
+      await supabase.from('profiles').update({ primary_goal: selectedGoal }).eq('id', user.id);
       if (plan?.id) {
-        const selectedGoalTitle = formatGoal(selectedGoal);
-
-        const { error: planError } = await supabase
-          .from('plans')
-          .update({
-            goal: selectedGoal,
-            title: `${plan.duration_months} Month ${selectedGoalTitle} Transformation`,
-            summary:
-              selectedGoal === 'fit'
-                ? 'A balanced transformation plan focused on strength, clean nutrition, cardio, face yoga and better sleep.'
-                : selectedGoal === 'lean'
-                  ? 'A lean transformation plan focused on fat loss, definition, clean meals, cardio and consistency.'
-                  : 'A muscle growth plan focused on progressive strength training, higher protein nutrition and recovery.',
-          })
-          .eq('id', plan.id);
-
-        if (planError) {
-          throw planError;
-        }
+        await supabase.from('plans').update({
+          goal: selectedGoal,
+          title: `${plan.duration_months} Month ${goalTitle(selectedGoal)} Transformation`,
+          summary: selectedGoal === 'fit'
+            ? 'A complete balanced transformation system for strength, shape, nutrition and recovery.'
+            : selectedGoal === 'bulk'
+              ? 'A muscle growth system focused on progressive strength, protein nutrition and recovery.'
+              : 'A lean transformation system focused on fat loss, definition, cardio and clean nutrition.',
+        }).eq('id', plan.id);
       }
-
-      router.replace('/home');
-    } catch (error) {
-      console.error('GOAL_SAVE_ERROR', error);
-      Alert.alert('Goal error', 'We could not save your goal. Please try again.');
+      router.push('/onboarding/future-body');
     } finally {
       setIsSaving(false);
     }
   }
 
   if (isLoading) {
-    return (
-      <Screen style={styles.centerScreen}>
-        <ActivityIndicator size="large" color={colors.goldSoft} />
-        <Text style={styles.loadingText}>Loading your AI recommendation...</Text>
-      </Screen>
-    );
+    return <ExactScreen><View style={styles.center}><ActivityIndicator color={exactColors.goldLight} /></View></ExactScreen>;
   }
 
   return (
-    <Screen style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.step}>STEP 04</Text>
-        <Text style={styles.title}>Choose your transformation goal</Text>
-        <Text style={styles.subtitle}>
-          AI recommends your best direction, but the final choice is yours.
-        </Text>
-      </View>
+    <ExactScreen waveMode="full">
+      <ExactHeader title="YOUR AI ANALYSIS" showBack progress={0.76} />
 
-      <View style={styles.recommendationCard}>
-        <Text style={styles.cardEyebrow}>AI RECOMMENDATION</Text>
-        <View style={styles.recommendationRow}>
-          <View>
-            <Text style={styles.recommendedGoal}>{formatGoal(recommendedGoal)}</Text>
-            <Text style={styles.recommendedMeta}>
-              {analysis?.confidence_score ?? 72}% confidence
-            </Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <ExactCard style={styles.resultCard}>
+          <View style={styles.scoreBox}>
+            <Text style={styles.cardKicker}>AI Score</Text>
+            <View style={styles.scoreRow}>
+              <Text style={styles.score}>{analysis?.confidence_score ?? 72}</Text>
+              <Text style={styles.max}>/100</Text>
+            </View>
           </View>
 
-          <View style={styles.scoreCircle}>
-            <Text style={styles.scoreText}>{analysis?.confidence_score ?? 72}</Text>
+          <View style={styles.ringWrap}>
+            <View style={styles.ring} />
+            <View style={styles.ringInner} />
+          </View>
+
+          <View style={styles.resultTextBox}>
+            <Text style={styles.good}>Good Start!</Text>
+            <Text style={styles.resultText}>You’re on the right track. Let’s build your plan.</Text>
+          </View>
+        </ExactCard>
+
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Body Type</Text>
+            <Text style={styles.statValue}>{formatBodyType(analysis?.body_type)}</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Body Fat</Text>
+            <Text style={styles.statValue}>{analysis?.estimated_body_fat ?? 18.5}%</Text>
           </View>
         </View>
 
-        <Text style={styles.recommendationText}>
-          {analysis?.summary ??
-            'Your starting point is strong. A balanced FIT plan is recommended for your first transformation phase.'}
-        </Text>
+        <Text style={styles.sectionTitle}>Recommended Goal</Text>
 
-        {analysis?.estimated_body_fat ? (
-          <Text style={styles.bodyFatText}>
-            Estimated body fat: {analysis.estimated_body_fat}%
-          </Text>
-        ) : null}
-      </View>
-
-      <View style={styles.goals}>
-        {goals.map((goal) => {
-          const isSelected = selectedGoal === goal.key;
-          const isRecommended = recommendedGoal === goal.key;
-
-          return (
-            <Pressable
-              key={goal.key}
-              style={[styles.goalCard, isSelected && styles.goalCardSelected]}
-              onPress={() => setSelectedGoal(goal.key)}
-              disabled={isSaving}
-            >
-              <View style={styles.goalHeader}>
-                <View>
-                  <Text style={styles.goalTitle}>{goal.title}</Text>
-                  <Text style={styles.goalSubtitle}>{goal.subtitle}</Text>
+        <View style={styles.figureRow}>
+          {goals.map((goal) => {
+            const selected = selectedGoal === goal.key;
+            return (
+              <Pressable
+                key={goal.key}
+                style={[styles.figureCard, selected && styles.figureCardSelected]}
+                onPress={() => setSelectedGoal(goal.key)}
+              >
+                <Image source={goal.figure} style={styles.figure} resizeMode="contain" />
+                <View style={styles.figureFooter}>
+                  <Text style={styles.figureLabel}>{goal.title}</Text>
                 </View>
+                {selected ? (
+                  <View style={styles.selectedMark}>
+                    <Text style={styles.selectedMarkText}>✓</Text>
+                  </View>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
 
-                <View style={[styles.radio, isSelected && styles.radioSelected]}>
-                  {isSelected ? <View style={styles.radioDot} /> : null}
-                </View>
-              </View>
+        <View style={styles.goalTextPanel}>
+          <Text style={styles.selectedTitle}>{goals.find((item) => item.key === selectedGoal)?.title}</Text>
+          <Text style={styles.selectedSubtitle}>{goals.find((item) => item.key === selectedGoal)?.subtitle}</Text>
+        </View>
 
-              <Text style={styles.goalDescription}>{goal.description}</Text>
-
-              {isRecommended ? (
-                <View style={styles.recommendedPill}>
-                  <Text style={styles.recommendedPillText}>AI Recommended</Text>
-                </View>
-              ) : null}
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <PremiumButton
-        title={isSaving ? 'Saving Goal...' : 'Continue to Dashboard'}
-        onPress={handleContinue}
-        disabled={isSaving}
-      />
-    </Screen>
+        <ExactGoldButton
+          title={isSaving ? 'Saving...' : 'Create My Plan'}
+          onPress={handleNext}
+          disabled={isSaving}
+          style={styles.button}
+        />
+      </ScrollView>
+    </ExactScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    paddingVertical: 34,
-  },
-  centerScreen: {
+  center: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loadingText: {
-    color: colors.muted,
-    marginTop: 16,
-    fontSize: 15,
+  scrollContent: {
+    paddingBottom: 96,
   },
-  header: {
-    marginBottom: 22,
+  resultCard: {
+    minHeight: 126,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  step: {
-    color: colors.goldSoft,
+  scoreBox: {
+    width: 78,
+  },
+  cardKicker: {
+    color: exactColors.goldLight,
     fontSize: 12,
     fontWeight: '900',
-    letterSpacing: 3,
   },
-  title: {
-    color: colors.text,
-    fontSize: 35,
-    fontWeight: '900',
-    marginTop: 14,
-    letterSpacing: -1,
-    lineHeight: 41,
-  },
-  subtitle: {
-    color: colors.muted,
-    fontSize: 16,
-    marginTop: 10,
-    lineHeight: 24,
-  },
-  recommendationCard: {
-    borderRadius: radius.xxl,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 22,
-  },
-  cardEyebrow: {
-    color: colors.goldSoft,
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  recommendationRow: {
-    marginTop: 16,
+  scoreRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: 2,
   },
-  recommendedGoal: {
-    color: colors.text,
-    fontSize: 34,
+  score: {
+    color: exactColors.text,
+    fontSize: 44,
+    lineHeight: 49,
+    fontWeight: '300',
+  },
+  max: {
+    color: exactColors.text,
+    fontSize: 15,
     fontWeight: '900',
-    letterSpacing: -1,
+    marginBottom: 7,
   },
-  recommendedMeta: {
-    color: colors.muted,
-    fontSize: 14,
-    marginTop: 4,
-  },
-  scoreCircle: {
-    width: 62,
-    height: 62,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.goldSoft,
+  ringWrap: {
+    width: 64,
+    height: 64,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(212,175,55,0.08)',
   },
-  scoreText: {
-    color: colors.goldSoft,
-    fontSize: 20,
+  ring: {
+    position: 'absolute',
+    width: 64,
+    height: 64,
+    borderRadius: 999,
+    borderWidth: 7,
+    borderColor: exactColors.gold,
+    borderLeftColor: 'rgba(246,217,143,0.16)',
+    transform: [{ rotate: '20deg' }],
+  },
+  ringInner: {
+    width: 39,
+    height: 39,
+    borderRadius: 999,
+    backgroundColor: 'rgba(4, 19, 12, 0.92)',
+  },
+  resultTextBox: {
+    flex: 1,
+  },
+  good: {
+    color: exactColors.goldLight,
+    fontSize: 14.5,
     fontWeight: '900',
   },
-  recommendationText: {
-    color: colors.muted,
-    fontSize: 15,
-    lineHeight: 23,
-    marginTop: 18,
+  resultText: {
+    color: exactColors.text,
+    fontSize: 11.8,
+    lineHeight: 17.6,
+    marginTop: 5,
+    fontWeight: '600',
   },
-  bodyFatText: {
-    color: colors.goldSoft,
-    fontSize: 13,
-    fontWeight: '800',
-    marginTop: 12,
-  },
-  goals: {
-    flex: 1,
-    gap: 12,
-    marginTop: 18,
-  },
-  goalCard: {
-    borderRadius: radius.xl,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 18,
-  },
-  goalCardSelected: {
-    borderColor: colors.goldSoft,
-    backgroundColor: 'rgba(212,175,55,0.08)',
-  },
-  goalHeader: {
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    gap: 12,
+    marginTop: 14,
   },
-  goalTitle: {
-    color: colors.text,
+  statCard: {
+    flex: 1,
+    minHeight: 76,
+    borderRadius: exactRadius.md,
+    borderWidth: 1,
+    borderColor: exactColors.borderSoft,
+    backgroundColor: 'rgba(5,26,17,0.67)',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  statLabel: {
+    color: exactColors.textSoft,
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  statValue: {
+    color: exactColors.goldLight,
     fontSize: 22,
     fontWeight: '900',
+    marginTop: 4,
   },
-  goalSubtitle: {
-    color: colors.goldSoft,
-    fontSize: 13,
-    fontWeight: '700',
-    marginTop: 3,
+  sectionTitle: {
+    color: exactColors.text,
+    fontSize: 17,
+    fontWeight: '900',
+    marginTop: 24,
+    marginBottom: 12,
+    textTransform: 'uppercase',
   },
-  goalDescription: {
-    color: colors.muted,
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 10,
+  figureRow: {
+    flexDirection: 'row',
+    gap: 8,
   },
-  radio: {
-    width: 24,
-    height: 24,
-    borderRadius: 999,
+  figureCard: {
+    flex: 1,
+    height: 176,
+    borderRadius: exactRadius.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: exactColors.border,
+    backgroundColor: 'rgba(5,26,17,0.72)',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+  figureCardSelected: {
+    borderColor: exactColors.borderStrong,
+    backgroundColor: 'rgba(10,44,28,0.78)',
+  },
+  figure: {
+    width: '94%',
+    height: 136,
+    marginBottom: 1,
+  },
+  figureFooter: {
+    width: '100%',
+    paddingVertical: 7,
+    backgroundColor: 'rgba(0,0,0,0.16)',
+  },
+  figureLabel: {
+    textAlign: 'center',
+    color: exactColors.goldLight,
+    fontSize: 13.5,
+    fontWeight: '900',
+  },
+  selectedMark: {
+    position: 'absolute',
+    top: 9,
+    right: 9,
+    width: 28,
+    height: 28,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: exactColors.goldLight,
   },
-  radioSelected: {
-    borderColor: colors.goldSoft,
-  },
-  radioDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 999,
-    backgroundColor: colors.goldSoft,
-  },
-  recommendedPill: {
-    alignSelf: 'flex-start',
-    marginTop: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  recommendedPillText: {
-    color: colors.goldSoft,
-    fontSize: 11,
+  selectedMarkText: {
+    color: exactColors.backgroundDeep,
+    fontSize: 18,
     fontWeight: '900',
+  },
+  goalTextPanel: {
+    minHeight: 70,
+    marginTop: 12,
+    borderRadius: exactRadius.md,
+    borderWidth: 1,
+    borderColor: exactColors.borderSoft,
+    backgroundColor: 'rgba(7,31,20,0.58)',
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+  },
+  selectedTitle: {
+    color: exactColors.goldLight,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  selectedSubtitle: {
+    color: exactColors.text,
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  button: {
+    marginTop: 16,
+    marginBottom: 12,
   },
 });

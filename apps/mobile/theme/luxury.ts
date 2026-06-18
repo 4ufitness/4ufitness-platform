@@ -1,32 +1,34 @@
 export const luxuryColors = {
-  background: '#03110B',
-  backgroundDeep: '#010806',
-  emerald: '#062015',
-  emeraldSoft: '#0A2B1C',
-  emeraldCard: '#071C13',
+  background: '#020A07',
+  backgroundDeep: '#000403',
+  emerald: '#04150E',
+  emeraldSoft: '#092619',
+  emeraldCard: '#071D13',
+  emeraldLine: '#103725',
 
   gold: '#C9A15A',
-  goldLight: '#F4D58A',
-  goldDark: '#7C5A22',
-  goldSoft: 'rgba(244, 213, 138, 0.92)',
+  goldLight: '#F6D98F',
+  goldDark: '#76551F',
+  goldSoft: 'rgba(246, 217, 143, 0.92)',
 
   text: '#FFF7E6',
   textSoft: '#D8C9AA',
   muted: '#9B8E73',
 
-  border: 'rgba(244, 213, 138, 0.26)',
-  borderStrong: 'rgba(244, 213, 138, 0.58)',
+  border: 'rgba(246, 217, 143, 0.24)',
+  borderStrong: 'rgba(246, 217, 143, 0.62)',
 
-  danger: '#FF6B6B',
-  success: '#A9D96F',
+  danger: '#FF746D',
+  success: '#B9E17E',
 };
 
 export const luxuryGradient = {
-  screen: ['#010806', '#03110B', '#062015'],
-  card: ['rgba(9, 33, 22, 0.98)', 'rgba(3, 17, 11, 0.98)'],
-  gold: ['#F4D58A', '#C9A15A', '#7C5A22'],
-  goldSoft: ['rgba(244, 213, 138, 0.95)', 'rgba(201, 161, 90, 0.88)'],
-  tab: ['rgba(3, 17, 11, 0.98)', 'rgba(1, 8, 6, 0.98)'],
+  screen: ['#000403', '#020A07', '#04150E', '#092619'] as const,
+  card: ['rgba(10, 38, 25, 0.98)', 'rgba(3, 16, 11, 0.98)'] as const,
+  cardSoft: ['rgba(13, 50, 33, 0.98)', 'rgba(5, 22, 15, 0.98)'] as const,
+  gold: ['#F6D98F', '#C9A15A', '#76551F'] as const,
+  goldSoft: ['rgba(246, 217, 143, 0.94)', 'rgba(201, 161, 90, 0.86)'] as const,
+  tab: ['rgba(4, 21, 14, 0.98)', 'rgba(0, 4, 3, 0.99)'] as const,
 };
 
 export const luxuryRadius = {
@@ -50,14 +52,14 @@ export const luxurySpacing = {
 
 export const luxuryTypography = {
   title: {
-    fontSize: 42,
-    lineHeight: 50,
+    fontSize: 43,
+    lineHeight: 49,
     fontWeight: '900' as const,
     letterSpacing: -1.7,
   },
   h1: {
     fontSize: 34,
-    lineHeight: 41,
+    lineHeight: 40,
     fontWeight: '900' as const,
     letterSpacing: -1.2,
   },
@@ -78,8 +80,8 @@ export const luxuryTypography = {
     fontWeight: '700' as const,
   },
   kicker: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 15,
     fontWeight: '900' as const,
     letterSpacing: 3.2,
   },
@@ -87,17 +89,17 @@ export const luxuryTypography = {
 
 export const luxuryShadow = {
   goldGlow: {
-    shadowColor: '#F4D58A',
+    shadowColor: '#F6D98F',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.2,
     shadowRadius: 22,
     elevation: 8,
   },
   dark: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.28,
-    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.34,
+    shadowRadius: 28,
     elevation: 10,
   },
 };

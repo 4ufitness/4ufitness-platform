@@ -13,12 +13,19 @@ type LuxuryTaskCardProps = {
   onPress?: () => void;
 };
 
-export function LuxuryTaskCard({ icon, title, subtitle, meta, completed = false, onPress }: LuxuryTaskCardProps) {
+export function LuxuryTaskCard({
+  icon,
+  title,
+  subtitle,
+  meta,
+  completed = false,
+  onPress,
+}: LuxuryTaskCardProps) {
   return (
-    <Pressable onPress={onPress}>
-      <LuxuryCard style={[styles.card, completed && styles.completed]}>
+    <Pressable onPress={onPress} disabled={!onPress}>
+      <LuxuryCard style={[styles.card, completed && styles.completed]} innerStyle={styles.inner}>
         <View style={styles.iconBox}>
-          <Ionicons name={icon} size={25} color={luxuryColors.goldLight} />
+          <Ionicons name={icon} size={24} color={luxuryColors.goldLight} />
         </View>
 
         <View style={styles.content}>
@@ -30,8 +37,10 @@ export function LuxuryTaskCard({ icon, title, subtitle, meta, completed = false,
 
         <View style={styles.right}>
           {meta ? <Text style={styles.meta}>{meta}</Text> : null}
-          <View style={styles.checkCircle}>
-            {completed ? <Ionicons name="checkmark" size={17} color={luxuryColors.backgroundDeep} /> : null}
+          <View style={[styles.checkCircle, completed && styles.checkCircleDone]}>
+            {completed ? (
+              <Ionicons name="checkmark" size={17} color={luxuryColors.backgroundDeep} />
+            ) : null}
           </View>
         </View>
       </LuxuryCard>
@@ -41,7 +50,10 @@ export function LuxuryTaskCard({ icon, title, subtitle, meta, completed = false,
 
 const styles = StyleSheet.create({
   card: {
-    minHeight: 76,
+    marginBottom: 12,
+  },
+  inner: {
+    minHeight: 78,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 13,
@@ -56,7 +68,7 @@ const styles = StyleSheet.create({
     borderRadius: luxuryRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(244, 213, 138, 0.08)',
+    backgroundColor: 'rgba(246,217,143,0.08)',
     borderWidth: 1,
     borderColor: luxuryColors.border,
   },
@@ -89,8 +101,11 @@ const styles = StyleSheet.create({
     borderRadius: luxuryRadius.full,
     borderWidth: 1,
     borderColor: luxuryColors.borderStrong,
-    backgroundColor: 'rgba(244, 213, 138, 0.08)',
+    backgroundColor: 'rgba(246,217,143,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  checkCircleDone: {
+    backgroundColor: luxuryColors.goldLight,
   },
 });

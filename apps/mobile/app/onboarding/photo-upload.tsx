@@ -3,265 +3,322 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { PremiumButton } from '@/components/ui/PremiumButton';
-import { Screen } from '@/components/ui/Screen';
+import { exactAssets } from '@/assets/exact/assets';
+import { ExactGoldButton } from '@/components/exact/ExactGoldButton';
+import { ExactHeader } from '@/components/exact/ExactHeader';
+import { ExactScreen } from '@/components/exact/ExactScreen';
 import { getOrCreateAnonymousUser } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
-import { colors, radius } from '@/theme';
+import { exactColors, exactRadius } from '@/theme/exact-match';
 
 type PhotoKey = 'front' | 'side' | 'back';
+type PhotoState = Record<PhotoKey, string | null>;
 
-type SelectedPhotos = {
-  front?: string;
-  side?: string;
-  back?: string;
+type UploadedPaths = {
+  front_photo_path: string;
+  side_photo_path: string;
+  back_photo_path: string;
 };
 
-const photoLabels: Record<PhotoKey, string> = {
-  front: 'Front',
-  side: 'Side',
-  back: 'Back',
-};
+const labels: { key: PhotoKey; title: string; subtitle: string }[] = [
+  { key: 'front', title: 'Front', subtitle: 'Straight' },
+  { key: 'side', title: 'Side', subtitle: 'Profile' },
+  { key: 'back', title: 'Back', subtitle: 'Rear' },
+];
 
-const photoDescriptions: Record<PhotoKey, string> = {
-  front: 'Front body photo',
-  side: 'Side body photo',
-  back: 'Back body photo',
-};
+const initialPhotos: PhotoState = { front: null, side: null, back: null };
 
 export default function PhotoUploadScreen() {
-  const [photos, setPhotos] = useState<SelectedPhotos>({});
+  const [photos, setPhotos] = useState<PhotoState>(initialPhotos);
   const [isUploading, setIsUploading] = useState(false);
 
-  async function pickImage(type: PhotoKey) {
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (!permission.granted) {
-        Alert.alert('Permission needed', 'Please allow photo access to continue.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        allowsEditing: true,
-        quality: 0.85,
-        aspect: [3, 4],
-        mediaTypes: ['images'],
-      });
-
-      if (result.canceled) {
-        return;
-      }
-
-      const uri = result.assets?.[0]?.uri;
-
-      if (!uri) {
-        Alert.alert('Photo error', 'Selected photo could not be read.');
-        return;
-      }
-
-      setPhotos((current) => ({
-        ...current,
-        [type]: uri,
-      }));
-    } catch (error) {
-      console.error('PHOTO_PICK_ERROR', error);
-      Alert.alert('Photo error', 'We could not select this photo. Please try again.');
+  async function pickPhoto(type: PhotoKey) {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission required', 'Please allow photo access to upload your body photos.');
+      return;
     }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: 0.9,
+    });
+
+    if (result.canceled || !result.assets?.[0]?.uri) return;
+    setPhotos((current) => ({ ...current, [type]: result.assets[0].uri }));
   }
 
   async function uploadPhoto(userId: string, type: PhotoKey, uri: string) {
     const fileInfo = await FileSystem.getInfoAsync(uri);
-
-    if (!fileInfo.exists) {
-      throw new Error(`${type} photo file does not exist.`);
-    }
+    if (!fileInfo.exists) throw new Error(`${type} photo not found.`);
 
     const base64 = await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
 
-    const arrayBuffer = decode(base64);
     const filePath = `${userId}/${type}-${Date.now()}.jpg`;
 
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from('body-photos')
-      .upload(filePath, arrayBuffer, {
+      .upload(filePath, decode(base64), {
         contentType: 'image/jpeg',
         upsert: true,
       });
 
-    if (error) {
-      throw error;
-    }
-
-    return data.path;
+    if (error) throw error;
+    return filePath;
   }
 
   async function handleContinue() {
     if (!photos.front || !photos.side || !photos.back) {
-      Alert.alert('Missing photos', 'Please upload front, side and back photos.');
+      Alert.alert('Photos required', 'Please upload front, side and back photos for AI analysis.');
       return;
     }
 
     try {
       setIsUploading(true);
-
       const user = await getOrCreateAnonymousUser();
 
-      const frontPath = await uploadPhoto(user.id, 'front', photos.front);
-      const sidePath = await uploadPhoto(user.id, 'side', photos.side);
-      const backPath = await uploadPhoto(user.id, 'back', photos.back);
+      const [front, side, back] = await Promise.all([
+        uploadPhoto(user.id, 'front', photos.front),
+        uploadPhoto(user.id, 'side', photos.side),
+        uploadPhoto(user.id, 'back', photos.back),
+      ]);
+
+      const uploaded: UploadedPaths = {
+        front_photo_path: front,
+        side_photo_path: side,
+        back_photo_path: back,
+      };
 
       const { error } = await supabase.from('body_photos').insert({
         user_id: user.id,
-        front_photo_path: frontPath,
-        side_photo_path: sidePath,
-        back_photo_path: backPath,
+        ...uploaded,
         status: 'uploaded',
       });
 
-      if (error) {
-        throw error;
-      }
-
+      if (error) throw error;
       router.push('/onboarding/ai-analysis');
     } catch (error) {
       console.error('PHOTO_UPLOAD_ERROR', error);
-      Alert.alert('Upload failed', 'We could not upload your photos. Please try again.');
+      Alert.alert('Upload error', 'We could not upload your photos. Please try again.');
     } finally {
       setIsUploading(false);
     }
   }
 
+  const uploadedCount = labels.filter((item) => photos[item.key]).length;
+
   return (
-    <Screen style={styles.screen}>
-      <View>
-        <Text style={styles.step}>STEP 02</Text>
-        <Text style={styles.title}>Upload your body photos</Text>
-        <Text style={styles.subtitle}>
-          Front, side and back photos help AI create your transformation plan.
-        </Text>
-      </View>
+    <ExactScreen waveMode="full">
+      <ExactHeader title="UPLOAD YOUR PHOTOS" showBack progress={0.52} />
 
-      <View style={styles.grid}>
-        {(['front', 'side', 'back'] as PhotoKey[]).map((type) => {
-          const selectedUri = photos[type];
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <View style={styles.copyBox}>
+          <Text style={styles.title}>Front, side, back</Text>
+          <Text style={styles.subtitle}>
+            AI reads your body structure from three angles and creates the first transformation direction.
+          </Text>
+        </View>
 
-          return (
-            <Pressable
-              key={type}
-              style={styles.uploadCard}
-              onPress={() => pickImage(type)}
-              disabled={isUploading}
-            >
-              {selectedUri ? (
-                <>
-                  <Image source={{ uri: selectedUri }} style={styles.preview} />
-                  <View style={styles.previewOverlay}>
-                    <Text style={styles.previewLabel}>{photoLabels[type]}</Text>
-                    <Text style={styles.previewChange}>Tap to change</Text>
+        <View style={styles.progressMini}>
+          <Text style={styles.progressText}>{uploadedCount}/3 photos uploaded</Text>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${(uploadedCount / 3) * 100}%` }]} />
+          </View>
+        </View>
+
+        <View style={styles.tiles}>
+          {labels.map((item) => {
+            const active = Boolean(photos[item.key]);
+            return (
+              <Pressable
+                key={item.key}
+                style={[styles.uploadTile, active && styles.uploadTileActive]}
+                onPress={() => pickPhoto(item.key)}
+                disabled={isUploading}
+              >
+                {photos[item.key] ? (
+                  <Image source={{ uri: photos[item.key] as string }} style={styles.preview} resizeMode="cover" />
+                ) : (
+                  <View style={styles.placeholder}>
+                    <Image source={exactAssets.icons.upload} style={styles.bodyIcon} resizeMode="contain" />
+                    <View style={styles.cameraCircle}>
+                      <Image source={exactAssets.icons.camera} style={styles.cameraIcon} resizeMode="contain" />
+                    </View>
                   </View>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.uploadIcon}>＋</Text>
-                  <Text style={styles.uploadTitle}>{photoLabels[type]}</Text>
-                  <Text style={styles.uploadSubtitle}>{photoDescriptions[type]}</Text>
-                </>
-              )}
-            </Pressable>
-          );
-        })}
-      </View>
+                )}
 
-      <PremiumButton
-        title={isUploading ? 'Uploading...' : 'Start AI Analysis'}
+                <View style={styles.tileFooter}>
+                  <Text style={styles.tileLabel}>{item.title}</Text>
+                  <Text style={styles.tileSub}>{active ? 'Ready' : item.subtitle}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={styles.securityBox}>
+          <Text style={styles.securityTitle}>Private body analysis</Text>
+          <Text style={styles.securityText}>
+            Keep the same lighting and distance for best results. Your full plan will be generated after this step.
+          </Text>
+        </View>
+      </ScrollView>
+
+      <ExactGoldButton
+        title={isUploading ? 'Uploading...' : 'Continue'}
         onPress={handleContinue}
         disabled={isUploading}
+        style={styles.button}
       />
-    </Screen>
+    </ExactScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    paddingVertical: 38,
+  scroll: {
+    paddingTop: 4,
+    paddingBottom: 82,
   },
-  step: {
-    color: colors.goldSoft,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 2,
+  copyBox: {
+    alignItems: 'center',
+    marginBottom: 18,
   },
   title: {
-    color: colors.text,
-    fontSize: 35,
+    color: exactColors.text,
+    fontSize: 25,
+    lineHeight: 31,
     fontWeight: '900',
-    marginTop: 14,
-    letterSpacing: -1,
+    textAlign: 'center',
   },
   subtitle: {
-    color: colors.muted,
-    fontSize: 16,
-    marginTop: 10,
-    lineHeight: 24,
+    color: exactColors.textSoft,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginTop: 8,
+    marginHorizontal: 10,
+    fontWeight: '600',
   },
-  grid: {
-    marginTop: 34,
-    gap: 14,
+  progressMini: {
+    marginBottom: 18,
+  },
+  progressText: {
+    color: exactColors.goldLight,
+    fontSize: 12,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  progressTrack: {
+    height: 5,
+    width: 160,
+    alignSelf: 'center',
+    borderRadius: 999,
+    backgroundColor: 'rgba(246,217,143,0.16)',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: exactColors.goldLight,
+  },
+  tiles: {
+    flexDirection: 'row',
+    gap: 9,
+  },
+  uploadTile: {
     flex: 1,
-  },
-  uploadCard: {
-    height: 145,
-    borderRadius: radius.xl,
-    backgroundColor: colors.surface,
+    height: 148,
+    borderRadius: exactRadius.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderStyle: 'dashed',
+    borderColor: exactColors.border,
+    backgroundColor: 'rgba(5, 26, 17, 0.74)',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  uploadIcon: {
-    color: colors.goldSoft,
-    fontSize: 34,
-    fontWeight: '500',
-  },
-  uploadTitle: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-    marginTop: 10,
-  },
-  uploadSubtitle: {
-    color: colors.muted,
-    fontSize: 13,
-    marginTop: 4,
+  uploadTileActive: {
+    borderStyle: 'solid',
+    borderColor: exactColors.borderStrong,
   },
   preview: {
+    ...StyleSheet.absoluteFillObject,
     width: '100%',
     height: '100%',
   },
-  previewOverlay: {
+  placeholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  bodyIcon: {
+    width: 42,
+    height: 50,
+    opacity: 0.76,
+  },
+  cameraCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    backgroundColor: 'rgba(246,217,143,0.10)',
+    borderWidth: 1,
+    borderColor: exactColors.borderSoft,
+  },
+  cameraIcon: {
+    width: 21,
+    height: 21,
+  },
+  tileFooter: {
     position: 'absolute',
-    left: 12,
-    right: 12,
-    bottom: 12,
-    borderRadius: radius.md,
-    backgroundColor: 'rgba(0,0,0,0.52)',
+    left: 0,
+    right: 0,
+    bottom: 0,
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.22)',
   },
-  previewLabel: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '800',
+  tileLabel: {
+    color: exactColors.goldLight,
+    fontSize: 12.5,
+    fontWeight: '900',
   },
-  previewChange: {
-    color: colors.goldSoft,
+  tileSub: {
+    color: exactColors.textSoft,
+    fontSize: 10.5,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  securityBox: {
+    marginTop: 20,
+    borderRadius: exactRadius.lg,
+    borderWidth: 1,
+    borderColor: exactColors.borderSoft,
+    backgroundColor: 'rgba(7,31,20,0.50)',
+    padding: 16,
+  },
+  securityTitle: {
+    color: exactColors.goldLight,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  securityText: {
+    color: exactColors.textSoft,
     fontSize: 12,
-    marginTop: 2,
+    lineHeight: 18,
+    marginTop: 6,
+    fontWeight: '600',
+  },
+  button: {
+    marginTop: 10,
+    marginBottom: 12,
   },
 });

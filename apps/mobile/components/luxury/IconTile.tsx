@@ -9,12 +9,13 @@ type IconTileProps = {
   title: string;
   subtitle: string;
   onPress?: () => void;
+  selected?: boolean;
 };
 
-export function IconTile({ icon, title, subtitle, onPress }: IconTileProps) {
+export function IconTile({ icon, title, subtitle, onPress, selected = false }: IconTileProps) {
   return (
-    <Pressable onPress={onPress}>
-      <LuxuryCard style={styles.card}>
+    <Pressable onPress={onPress} disabled={!onPress}>
+      <LuxuryCard selected={selected} style={styles.card} innerStyle={styles.inner}>
         <View style={styles.iconWrap}>
           <Ionicons name={icon} size={30} color={luxuryColors.goldLight} />
         </View>
@@ -28,18 +29,23 @@ export function IconTile({ icon, title, subtitle, onPress }: IconTileProps) {
 
 const styles = StyleSheet.create({
   card: {
+    flex: 1,
+  },
+  inner: {
     minHeight: 132,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 14,
   },
   iconWrap: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     borderRadius: luxuryRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(244, 213, 138, 0.08)',
+    backgroundColor: 'rgba(246,217,143,0.08)',
+    borderWidth: 1,
+    borderColor: luxuryColors.border,
     marginBottom: 10,
   },
   title: {
